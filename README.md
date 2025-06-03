@@ -1,1 +1,2 @@
 # Longitudinal
+This study uses longitudinal survey data to examine how perceived discrimination, marijuana use, and smoking history affect changes in psychological worry scores during the transition from adolescence to adulthood. Linear mixed-effects models (LMMs) were employed to model individual mental health trajectories over time and to assess differences across racial groups. Results indicate that discrimination and substance use are significantly associated with elevated psychological distress.
