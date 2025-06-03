@@ -1,0 +1,269 @@
+---
+title: "TAS_cleaning"
+author: "Yiyuan Kang"
+date: "2025-04-24"
+output: pdf_document
+---
+
+```{r}
+# read data
+library(tidyr)
+library(haven)
+library(dplyr)
+tas_dat <- read_dta("/Users/kangyiyuan/Desktop/2480 Final Project/finalproj.dta")
+
+# generate PID
+tas_dat <- tas_dat %>% 
+  mutate(PID = (ER30001 * 1000) + ER30002) %>%
+  relocate(PID) #putting at beginning of dataset
+
+#checking for duplicates by PID
+sum(duplicated(tas_dat$PID)) #should return 0
+
+# select variables:
+##' PID, time, discrimination, 
+##' smoke_ever, alcohol, marijuana, cocaine,
+##' mental_worry, mental_socanx, mental_flourish, mental_nonspecdist, mental_risky,
+##' race, chronic_con,
+##' bmi, dietpills, amphet, barbit, tranquil, steroids
+
+discrimination <- paste0("TA", c("050943", "070924", "090988", "111130", "131222", "151282", "171977", "192156"))
+
+smoke_ever <- paste0("TA", c("050762", "070733", "090792", "110908", "130941", "150957", "171811", "191973"))
+alcohol <- paste0("TA", c("050766", "070737", "090796", "130945", "150967"))
+marijuana_bi <- paste0("TA", c("050786", "070757", "090816", "110932", "130965", "150987", "171828", "191990"))
+marijuana_occ <- paste0("TA", c("050790", "070761", "090820", "110936", "130969", "150991", "171832", "191994"))
+cocaine <- paste0("TA", c("050794", "070765", "090824", "110940", "130973", "150995", "171836", "191998"))
+
+mental_worry <- paste0("TA", c("050932", "070913", "090977", "111119", "131211", "151271"))
+mental_socanx <- paste0("TA", c("050933", "070914", "090978", "111120", "131212", "151272", "171971", "192153"))
+mental_flourish <- paste0("TA", c("050934", "070915", "090979", "111121", "131213", "151273", "192152"))
+mental_nonspecdist <- paste0("TA", c("050938", "070919", "090983", "111125", "131217", "151277", "171975", "192155"))
+mental_risky <- paste0("TA", c("050939", "070920", "090984", "111126", "131218", "151278", "171976", "192157"))
+
+race <- paste0("TA", c("050884", "070865", "090925", "111057", "131092", "151132", "171955", "192131"))
+chronic_con <- paste0("TA", c("050720", "070691", "090747", "110839", "130863", "150880"))
+
+library(dplyr)
+tas_dat_1 <- tas_dat %>% 
+  select(PID, all_of(discrimination), 
+         all_of(smoke_ever), all_of(alcohol), all_of(marijuana_bi), all_of(marijuana_occ), all_of(cocaine),
+         all_of(mental_worry), all_of(mental_socanx), all_of(mental_flourish), all_of(mental_nonspecdist), all_of(mental_risky),
+         all_of(race), all_of(chronic_con))
+
+View(tas_dat_1)
+
+# Convert only 'discrimination' columns to long format
+library(tidyr)
+tas_dat_long <- tas_dat_1 %>%
+  select(PID, all_of(discrimination)) %>%
+  pivot_longer(
+    cols = all_of(discrimination),
+    names_to = c("time"),
+    names_pattern = "TA(\\d{2})",
+    values_to = "discrimination"
+  ) %>%
+  mutate(
+    time = as.integer(time)          
+  )
+
+# tas_dat_long2 <- tas_dat_1 %>%
+#   select(PID, all_of(smoke_ever)) %>%
+#   pivot_longer(
+#     cols = all_of(smoke_ever),
+#     names_to = c("time"),
+#     names_pattern = "TA(\\d{2})",
+#     values_to = "smoke_ever"
+#   ) %>%
+#   mutate(
+#     time = as.integer(time)          
+#   )
+# View(tas_dat_long2)
+
+
+# Convert 'smoke_ever' columns to long format
+# forget about the warning: it's variables label, doesn't pose an effect on the merged values
+# tas_dat_long2 <- tas_dat_1 %>%
+#   select(PID, all_of(smoke_ever)) %>%
+#   # Convert the selected columns to character to avoid label conflict
+#   mutate(across(all_of(smoke_ever), as.character)) %>%
+#   pivot_longer(
+#     cols = all_of(smoke_ever),
+#     names_to = c("time"),
+#     names_pattern = "TA(\\d{2})", # Capture the first two digits as time
+#     values_to = "smoke_ever"
+#   ) %>%
+#   mutate(time = as.integer(time))  # Convert time to integer
+# 
+# # View the result
+# head(tas_dat_long2)
+
+
+
+
+name_list <- list(smoke_ever=smoke_ever, alcohol=alcohol, marijuana_bi=marijuana_bi, marijuana_occ=marijuana_occ, cocaine=cocaine,
+               mental_worry=mental_worry, mental_socanx=mental_socanx, mental_flourish=mental_flourish, mental_nonspecdist=mental_nonspecdist, mental_risky=mental_risky,
+               race=race, chronic_con=chronic_con)
+
+# remember to suppress the warning
+for (i in 1:length(name_list)) {
+  dat_long <- tas_dat_1 %>%
+    select(PID, all_of(name_list[[i]])) %>%
+    pivot_longer(
+      cols = all_of(name_list[[i]]),
+      names_to = c("time"),
+      names_pattern = "TA(\\d{2})",
+      values_to = names(name_list[i])
+    ) %>%
+    mutate(
+      time = as.integer(time)          
+    )
+  tas_dat_long <- left_join(tas_dat_long, dat_long, by=c("PID", "time"))
+}
+
+# merge complete
+View(tas_dat_long)
+head(tas_dat_long)
+# tas_med <- read.csv()
+# View(tas_med)
+
+##* merge tas_dat_long with medicine use subset data
+tas_med <- read.csv("C:/Users/11366/Downloads/subset_cln.csv")
+View(tas_med)
+tas_long_final <- left_join(tas_dat_long, tas_med, by=c("PID", "time"))
+tas_long_final <- tas_long_final %>% 
+  mutate(discrimination = ifelse(discrimination == 9, NA, discrimination),
+         smoke_ever = ifelse(smoke_ever %in% c(8, 9), NA, smoke_ever ),
+         alcohol = ifelse(alcohol %in% c(8, 9), NA, alcohol),
+         marijuana_bi = ifelse(marijuana_bi %in% c(8, 9), NA, marijuana_bi),
+         marijuana_occ = ifelse(marijuana_occ %in% c(8, 9), NA, marijuana_occ),
+         cocaine = ifelse(cocaine %in% c(8, 9), NA, cocaine),
+         mental_worry = ifelse(mental_worry == 9, NA, mental_worry),
+         mental_socanx = ifelse(mental_socanx == 9, NA, mental_socanx),
+         mental_flourish = ifelse(mental_flourish == 99, NA, mental_flourish),
+         mental_nonspecdist = ifelse(mental_nonspecdist == 99, NA, mental_nonspecdist),
+         mental_risky = ifelse(mental_socanx == 9, NA, mental_socanx),
+         race = ifelse(race %in% c(8, 9), NA, race ),
+         chronic_con = ifelse(chronic_con %in% c(8, 9), NA, chronic_con),
+         bmi = ifelse(bmi == 99, NA, bmi))
+
+#View(tas_long_final)
+# write to CSV
+write.csv(tas_long_final, "C:/Users/11366/Downloads/tas_dat_selected.csv", row.names = F)
+
+
+
+
+## read in the data again
+tas_dat_slc <- read.csv("C:/Users/11366/Downloads/tas_dat_selected.csv")
+
+##* missing value investigation
+tas_wb <- tas_dat_slc %>% 
+  select(PID, time, 
+         mental_worry, mental_socanx, mental_flourish, mental_nonspecdist, mental_risky,
+         discrimination, race, chronic_con)
+
+# function: indexes for each item
+idx_na <- function(column){
+  return(which(is.na(column)))
+}
+# number of nas for each item
+sum_na <- function(column){
+  return(sum(is.na(column)))
+}
+
+# print number of subjects for each wave: 4776
+for (i in seq(5, 19, 2)){
+  subjects <- dim(tas_wb[tas_wb$time == i,])[1]
+  print(subjects)
+}
+
+# print na numbers
+for (i in seq(5, 19, 2)){
+  number <- tas_wb %>% 
+    filter(time == i) %>% sapply(sum_na)
+  print(number)
+}
+
+#* missing at: worry&chronic: 17, 19, flourish: 17
+#* discrimination na: 4031/4776 at 05; 3700~ at 07; 2200~ at 17&19; 2800-3200 at other years
+
+# drop nas of discrimination to see if missings are complete at majority
+for (i in seq(5, 19, 2)){
+  discri_drop_num <- tas_wb %>%
+    filter(time == i & !is.na(discrimination)) %>% 
+    sapply(sum_na)
+  print(discri_drop_num)
+}
+
+#* verified (worry and chronic already missing in 17 and 19 and flourish already missing in 17); 
+#* race missing 10~, at most in 05 with 30 NAs
+
+# idx of na across waves: after dropping those with missing discrimination
+discri_idx_list <- list()
+for (i in seq(5, 19, 2)){
+  discri_idx <- tas_wb %>%
+    filter(time == i & !is.na(discrimination)) %>% 
+    select(PID)
+  discri_idx_list[paste0("wave", i)] <- discri_idx
+}
+
+# the number of valid subjects at each wave (without missing discrimination)
+sapply(discri_idx_list, length)
+
+# how the subjects stay through years
+sub_through <- c()
+years <- seq(5, 19, 2)
+for (i in 1:5){
+    sub_through[i] <- length(unique(Reduce(intersect, list(discri_idx_list[[i]],
+                                              discri_idx_list[[i+1]],
+                                              discri_idx_list[[i+2]],
+                                              discri_idx_list[[i+3]]))))
+    }
+sub_through
+
+#* sample size for 4 consecutive waves: `r sub_through`
+
+##* 07, 09, 11, 13, 4 waves
+selected_PID <- Reduce(intersect, list(discri_idx_list[[2]],
+                                       discri_idx_list[[2+1]],
+                                       discri_idx_list[[2+2]],
+                                       discri_idx_list[[2+3]]))
+
+data_from_07 <- tas_dat_slc %>% 
+  filter(PID %in% selected_PID & time %in% c(7, 9, 11, 13)) %>% 
+  mutate(race = ifelse(time == 13 & race == 6, 5, race),
+         chronic_con = ifelse(chronic_con == 1, chronic_con, 0)) %>% 
+  select(-alcohol)
+
+complete_id <- data_from_07 %>% 
+  drop_na() %>% 
+  count(PID) %>% 
+  filter(n==4) %>% 
+  pull(PID)
+
+data_final <- data_from_07 %>% 
+  filter(PID %in% complete_id)
+
+data_final %>% 
+  group_by(time) %>% 
+  summarise(number = n())
+
+View(data_final)
+
+
+data_final <- data_final %>% 
+  select(PID, time, discrimination, 
+         smoke_ever, marijuana_bi, marijuana_occ, cocaine, chronic_con, bmi,
+         dietpill, amphet, barbit, tranquil, steroids,
+         mental_worry, race)
+
+write.csv(data_final, "C:/Users/11366/Downloads/data_final.csv", row.names = F)
+
+##* Outcome: worry
+##* exposure: discrimination
+##* substance use: marijuana and tobacco
+##* medicine: all kept
+##* time-invariant covariates: race: in 13, 1 takes 6
+```
+
